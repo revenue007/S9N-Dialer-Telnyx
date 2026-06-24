@@ -1,0 +1,15 @@
+# Telnyx Edge Compute — service config
+# Docs: https://developers.telnyx.com/docs/edge-compute/configuration
+name = "s9n-dialer"
+runtime = "nodejs20"
+
+# Set these env vars via the Telnyx portal or CLI before deploying:
+#   TELNYX_API_KEY        — Telnyx API key (from portal.telnyx.com)
+#   TELNYX_ACCOUNT_SID    — Telnyx account SID (from TeXML app settings)
+#   TELNYX_CREDENTIAL_ID  — Telephony Credential ID for WebRTC browser auth
+#   FROM_NUMBER           — Outbound number in E.164 (e.g. +17174708407)
+#   FUNCTION_URL          — Public base URL of this Edge Compute service
+#   UPSTASH_REDIS_URL     — Upstash Redis REST URL
+#   UPSTASH_REDIS_TOKEN   — Upstash Redis REST token
+#   LEMLIST_API_KEY       — (optional) Lemlist API key
+#   GOOGLE_SHEETS_WEBHOOK — (optional) Apps Script webhook URL

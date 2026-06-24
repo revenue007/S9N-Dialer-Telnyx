@@ -1,0 +1,32 @@
+name: Deploy to Telnyx Edge Compute
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Telnyx CLI
+        # See https://github.com/team-telnyx/telnyx-cli for latest install method
+        run: npm install -g @telnyx/cli
+
+      - name: Deploy to Telnyx Edge Compute
+        env:
+          TELNYX_API_KEY: ${{ secrets.TELNYX_API_KEY }}
+        run: |
+          telnyx login --api-key "$TELNYX_API_KEY"
+          telnyx edge-compute:deploy
+
+      - name: Done
+        run: echo "Deployed to Telnyx Edge Compute"
