@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>S9N Power Dialer</title>
+  <script src="https://cdn.jsdelivr.net/npm/@telnyx/webrtc@latest/lib/bundle.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #0f1117;
+      color: #e2e8f0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 24px 16px;
+    }
+    h1 { font-size: 1.4rem; font-weight: 700; letter-spacing: .5px; margin-bottom: 4px; }
+    .subtitle { font-size: .8rem; color: #64748b; margin-bottom: 24px; }
+
+    .card {
+      background: #1e2130;
+      border: 1px solid #2d3348;
+      border-radius: 12px;
+      padding: 20px;
+      width: 100%;
+      max-width: 540px;
+      margin-bottom: 16px;
+    }
+    .card-title { font-size: .7rem; text-transform: uppercase; letter-spacing: 1px; color: #64748b; margin-bottom: 12px; }
+
+    /* Status bar */
+    #status-bar {
+      display: flex; align-items: center; gap: 10px;
+      font-size: .85rem; margin-bottom: 16px;
+    }
+    #status-dot {
+      width: 10px; height: 10px; border-radius: 50%;
+      background: #ef4444; flex-shrink: 0;
+      transition: background .3s;
+    }
+    #status-dot.ready   { background: #22c55e; }
+    #status-dot.calling { background: #f59e0b; animation: pulse 1s infinite; }
+    @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:.4; } }
+
+    /* Contact card */
+    #contact-info { display: none; }
+    #contact-name  { font-size: 1.2rem; font-weight: 700; }
+    #contact-phone { font-size: .85rem; color: #94a3b8; margin-top: 2px; }
+    #contact-meta  { font-size: .75rem; color: #64748b; margin-top: 6px; }
+
+    /* Queue counter */
+    #queue-stats { font-size: .8rem; color: #64748b; }
+
+    /* Controls */
+    .btn-row { display: flex; gap: 10px; flex-wrap: wrap; }
+    button {
+      padding: 10px 18px; border-radius: 8px; border: none;
+      font-size: .85rem; font-weight: 600; cursor: pointer;
+      transition: opacity .15s, transform .1s;
+    }
+    button:active { transform: scale(.97); }
+    button:disabled { opacity: .35; cursor: not-allowed; }
+    .btn-green  { background: #22c55e; color: #000; }
+    .btn-red    { background: #ef4444; color: #fff; }
+    .btn-orange { background: #f59e0b; color: #000; }
+    .btn-slate  { background: #334155; color: #e2e8f0; }
+    .btn-blue   { background: #3b82f6; color: #fff; }
+
+    /* AMD result badge */
+    #amd-badge {
+      display: none; margin-top: 10px;
+      font-size: .75rem; font-weight: 700; letter-spacing: .5px;
+      padding: 4px 10px; border-radius: 6px; width: fit-content;
+    }
+    #amd-badge.human   { background: #166534; color: #bbf7d0; }
+    #amd-badge.machine { background: #7c2d12; color: #fed7aa; }
+
+    /* Disposition */
+    select, textarea, input[type=text] {
+      width: 100%; padding: 8px 12px; border-radius: 8px;
+      background: #0f1117; border: 1px solid #2d3348;
+      color: #e2e8f0; font-size: .85rem; margin-top: 6px;
+    }
+    textarea { resize: vertical; min-height: 64px; }
+    label { font-size: .75rem; color: #94a3b8; }
+
+    /* Call log */
+    #call-log { max-height: 180px; overflow-y: auto; font-size: .75rem; color: #64748b; }
+    #call-log .entry { padding: 4px 0; border-bottom: 1px solid #1e2130; }
+    #call-log .entry span { font-weight: 600; color: #94a3b8; }
+
+    /* Upload */
+    #upload-area { display: flex; gap: 8px; align-items: flex-start; flex-wrap: wrap; }
+    #upload-textarea { height: 80px; flex: 1; min-width: 220px; }
+
+    /* Balance */
+    #balance-display { font-size: 1rem; font-weight: 700; color: #22c55e; }
+
+    /* Lemlist section */
+    #lemlist-section { display: none; }
+
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+
+<h1>S9N Power Dialer</h1>
+<p class="subtitle">Telnyx Edition</p>
+
+<!-- Status -->
+<div class="card">
+  <div id="status-bar">
+    <div id="status-dot"></div>
+    <span id="status-text">Connecting…</span>
+    <span style="margin-left:auto; font-size:.75rem; color:#64748b" id="balance-display"></span>
+  </div>
+  <div id="queue-stats">Queue: loading…</div>
+</div>
+
+<!-- Current contact -->
+<div class="card" id="contact-info">
+  <div class="card-title">Current Contact</div>
+  <div id="contact-name">—</div>
+  <div id="contact-phone">—</div>
+  <div id="contact-meta">—</div>
+  <div id="amd-badge">HUMAN</div>
+
+  <div class="btn-row" style="margin-top:16px">
+    <button class="btn-green"  id="btn-dial"    onclick="startDial()">Dial</button>
+    <button class="btn-orange" id="btn-hangup-out" onclick="hangupOutbound()" disabled>Skip / Hang Up</button>
+    <button class="btn-red"    id="btn-hangup-all" onclick="hangupAll()" disabled>End Call</button>
+    <button class="btn-slate"  id="btn-next"    onclick="nextContact()" disabled>Next →</button>
+  </div>
+</div>
+
+<!-- Disposition -->
+<div class="card" id="disposition-card" class="hidden">
+  <div class="card-title">Disposition</div>
+  <label>Outcome
+    <select id="disp-status">
+      <option value="connected">Connected</option>
+      <option value="voicemail">Voicemail</option>
+      <option value="no_answer">No Answer</option>
+      <option value="busy">Busy</option>
+      <option value="wrong_number">Wrong Number</option>
+      <option value="not_in_service">Not in Service</option>
+      <option value="do_not_contact">Do Not Contact</option>
+    </select>
+  </label>
+  <label style="margin-top:8px">Sentiment
+    <select id="disp-sentiment">
+      <option value="">— (none)</option>
+      <option value="interested">Interested</option>
+      <option value="callback">Callback</option>
+      <option value="no_interest">No Interest</option>
+      <option value="bad_fit">Bad Fit</option>
+    </select>
+  </label>
+  <label style="margin-top:8px">Notes
+    <textarea id="disp-notes" placeholder="Optional notes…"></textarea>
+  </label>
+  <div class="btn-row" style="margin-top:12px">
+    <button class="btn-blue" onclick="submitDisposition()">Save &amp; Next</button>
+    <button class="btn-slate" onclick="skipDisposition()">Skip</button>
+  </div>
+</div>
+
+<!-- Upload contacts -->
+<div class="card">
+  <div class="card-title">Upload Contacts (JSON array)</div>
+  <div id="upload-area">
+    <textarea id="upload-textarea" placeholder='[{"firstName":"Jane","lastName":"Doe","phone":"+12125550001","company":"Acme"}]'></textarea>
+    <button class="btn-slate" onclick="uploadContacts()">Upload</button>
+  </div>
+  <div id="upload-status" style="font-size:.75rem;color:#64748b;margin-top:6px"></div>
+</div>
+
+<!-- Lemlist -->
+<div class="card">
+  <div class="card-title">Lemlist Campaign</div>
+  <div class="btn-row">
+    <input type="text" id="lemlist-campaign-id" placeholder="Campaign ID" style="flex:1" />
+    <button class="btn-slate" onclick="loadLemlist()">Load</button>
+  </div>
+  <div id="lemlist-status" style="font-size:.75rem;color:#64748b;margin-top:6px"></div>
+</div>
+
+<!-- Call log -->
+<div class="card">
+  <div class="card-title">Recent Calls</div>
+  <div id="call-log"><div class="entry" style="color:#334155">No calls yet this session.</div></div>
+</div>
+
+<script>
+// ─── Config ──────────────────────────────────────────────────────────────────
+// FUNCTION_URL is replaced at deploy time by the Edge Compute URL.
+// For local dev set window.FUNCTION_URL before this script runs, or use a
+// relative path (empty string = same origin).
+const BASE = window.FUNCTION_URL || '';
+
+// ─── State ───────────────────────────────────────────────────────────────────
+let client = null;       // TelnyxRTC instance
+let activeCall = null;   // current browser call leg
+let confName = null;     // persistent conference name for this session
+let contacts = [];       // pending contacts array
+let currentIdx = 0;      // index into contacts[]
+let amdResult = null;    // 'human' | 'machine' | null
+let outboundSid = null;  // current outbound leg SID
+let submitting = false;
+
+// ─── Init ─────────────────────────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', async () => {
+  confName = 'conf_' + Math.random().toString(36).slice(2);
+  await restoreState();
+  await loadContacts();
+  await fetchBalance();
+  await initTelnyx();
+});
+
+async function initTelnyx() {
+  setStatus('Fetching token…', false);
+  let token;
+  try {
+    const r = await api('/token');
+    token = r.token;
+  } catch (e) {
+    setStatus('Token error: ' + e.message, false);
+    return;
+  }
+
+  client = new TelnyxRTC({ login_token: token });
+
+  client.on('telnyx.ready', () => {
+    setStatus('Ready', true);
+    enableDial(true);
+  });
+
+  client.on('telnyx.error', (err) => {
+    setStatus('SDK error: ' + (err.message || JSON.stringify(err)), false);
+  });
+
+  client.on('telnyx.notification', (notification) => {
+    const call = notification.call;
+    if (!call) return;
+    activeCall = call;
+
+    if (call.state === 'active') {
+      setStatus('Connected', true, true);
+      setBtn('btn-hangup-all', false);
+      setBtn('btn-hangup-out', false);
+      setBtn('btn-dial', true);
+    }
+
+    if (call.state === 'hangup' || call.state === 'destroy') {
+      activeCall = null;
+      setStatus('Ready', true);
+      setBtn('btn-dial', false);
+      setBtn('btn-hangup-all', true);
+      setBtn('btn-hangup-out', true);
+      showDispositionCard();
+    }
+
+    if (call.state === 'ringing') {
+      setStatus('Ringing…', true, true);
+    }
+  });
+
+  client.connect();
+}
+
+// ─── Dialing ─────────────────────────────────────────────────────────────────
+async function startDial() {
+  const contact = contacts[currentIdx];
+  if (!contact) { alert('No contacts in queue.'); return; }
+  if (!client)  { alert('SDK not ready.'); return; }
+
+  setStatus('Joining conference…', true, true);
+  setBtn('btn-dial', true);
+
+  // Browser joins the persistent conference first
+  activeCall = client.newCall({
+    destinationNumber: `sip:${confName}@sip.telnyx.com`,
+    callerNumber: '',           // filled by server
+    clientState: btoa(JSON.stringify({ confName, mode: 'browser' })),
+  });
+
+  // Tell the server to dial the outbound leg
+  await dialOut(contact);
+}
+
+async function dialOut(contact) {
+  setStatus('Dialing ' + contact.phone + '…', true, true);
+  amdResult = null;
+  hideAmdBadge();
+
+  try {
+    const r = await api('/dial_out', {
+      to: contact.phone,
+      confName,
+      browserCallSid: activeCall?.id || '',
+    });
+    outboundSid = r.outboundSid;
+    setBtn('btn-hangup-out', false);
+    setBtn('btn-hangup-all', false);
+    setBtn('btn-next', true);
+    pollAmd();
+  } catch (e) {
+    setStatus('Dial error: ' + e.message, true);
+  }
+}
+
+function pollAmd() {
+  // Poll /resume_state for AMD result every 2s (server writes it in amd_status webhook)
+  const interval = setInterval(async () => {
+    try {
+      const r = await api('/resume_state');
+      if (r.amdResult && r.amdResult.state !== 'pending') {
+        clearInterval(interval);
+        amdResult = r.amdResult.state; // 'human' or 'machine'
+        showAmdBadge(amdResult);
+      }
+    } catch (_) {}
+  }, 2000);
+
+  // Stop polling after 45s regardless
+  setTimeout(() => clearInterval(interval), 45000);
+}
+
+async function hangupOutbound() {
+  if (!outboundSid) return;
+  try {
+    await api('/hangup_outbound', { outboundSid });
+    outboundSid = null;
+    setBtn('btn-hangup-out', true);
+  } catch (e) {
+    console.warn('hangup outbound error', e);
+  }
+}
+
+async function hangupAll() {
+  if (activeCall) {
+    try { activeCall.hangup(); } catch (_) {}
+    activeCall = null;
+  }
+  await hangupOutbound();
+  setStatus('Ready', true);
+  setBtn('btn-dial', false);
+  setBtn('btn-hangup-all', true);
+  setBtn('btn-hangup-out', true);
+  showDispositionCard();
+}
+
+// ─── Navigation ───────────────────────────────────────────────────────────────
+async function nextContact() {
+  currentIdx++;
+  await saveState();
+  renderContact();
+  hideDispositionCard();
+  setBtn('btn-next', true);
+  setBtn('btn-dial', false);
+}
+
+async function restoreState() {
+  try {
+    const r = await api('/resume_state');
+    if (r.currentIdx !== undefined) currentIdx = r.currentIdx;
+    if (r.confName)                 confName   = r.confName;
+  } catch (_) {}
+}
+
+async function saveState() {
+  try { await api('/resume_state', { currentIdx, confName }); } catch (_) {}
+}
+
+// ─── Contacts ────────────────────────────────────────────────────────────────
+async function loadContacts() {
+  try {
+    contacts = await api('/contacts');
+    renderContact();
+    document.getElementById('queue-stats').textContent =
+      `Queue: ${contacts.length} pending`;
+  } catch (e) {
+    document.getElementById('queue-stats').textContent = 'Queue: error loading';
+  }
+}
+
+function renderContact() {
+  const contact = contacts[currentIdx];
+  const info = document.getElementById('contact-info');
+  if (!contact) {
+    info.style.display = 'none';
+    document.getElementById('queue-stats').textContent = 'Queue: complete';
+    return;
+  }
+  info.style.display = 'block';
+  document.getElementById('contact-name').textContent =
+    [contact.firstName, contact.lastName].filter(Boolean).join(' ') || '(no name)';
+  document.getElementById('contact-phone').textContent = contact.phone || '—';
+  document.getElementById('contact-meta').textContent =
+    [contact.company, contact.title].filter(Boolean).join(' · ') || '';
+  document.getElementById('queue-stats').textContent =
+    `Queue: ${currentIdx + 1} / ${contacts.length}`;
+}
+
+// ─── Disposition ─────────────────────────────────────────────────────────────
+function showDispositionCard() {
+  document.getElementById('disposition-card').style.display = 'block';
+}
+function hideDispositionCard() {
+  document.getElementById('disposition-card').style.display = 'none';
+}
+
+async function submitDisposition() {
+  if (submitting) return;
+  submitting = true;
+  const contact = contacts[currentIdx] || {};
+  const status  = document.getElementById('disp-status').value;
+  const sentiment = document.getElementById('disp-sentiment').value;
+  const notes   = document.getElementById('disp-notes').value;
+
+  try {
+    await api('/update', {
+      index:       currentIdx,
+      status,
+      disposition: status,
+      sentiment,
+      notes,
+      phone:       contact.phone,
+      firstName:   contact.firstName,
+      lastName:    contact.lastName,
+      lemlistCampaignId: contact.lemlistCampaignId,
+      lemlistLeadId:     contact.lemlistLeadId,
+      lemlistTaskId:     contact.lemlistTaskId,
+    });
+    addLogEntry(contact, status, sentiment);
+  } catch (e) {
+    alert('Save error: ' + e.message);
+  }
+  submitting = false;
+  document.getElementById('disp-notes').value = '';
+  await nextContact();
+}
+
+function skipDisposition() {
+  nextContact();
+}
+
+function addLogEntry(contact, status, sentiment) {
+  const log = document.getElementById('call-log');
+  const entry = document.createElement('div');
+  entry.className = 'entry';
+  const name = [contact.firstName, contact.lastName].filter(Boolean).join(' ') || contact.phone;
+  entry.innerHTML = `<span>${name}</span> — ${status}${sentiment ? ' / ' + sentiment : ''} <small style="color:#475569">${new Date().toLocaleTimeString()}</small>`;
+  log.prepend(entry);
+}
+
+// ─── Upload ───────────────────────────────────────────────────────────────────
+async function uploadContacts() {
+  const raw = document.getElementById('upload-textarea').value.trim();
+  const el  = document.getElementById('upload-status');
+  let parsed;
+  try { parsed = JSON.parse(raw); } catch (e) { el.textContent = 'Invalid JSON'; return; }
+  if (!Array.isArray(parsed)) { el.textContent = 'Must be a JSON array'; return; }
+
+  el.textContent = 'Uploading…';
+  try {
+    const r = await api('/upload', { contacts: parsed });
+    el.textContent = `Uploaded ${parsed.length} contacts. ${JSON.stringify(r)}`;
+    await loadContacts();
+  } catch (e) {
+    el.textContent = 'Error: ' + e.message;
+  }
+}
+
+// ─── Lemlist ──────────────────────────────────────────────────────────────────
+async function loadLemlist() {
+  const campaignId = document.getElementById('lemlist-campaign-id').value.trim();
+  const el = document.getElementById('lemlist-status');
+  if (!campaignId) { el.textContent = 'Enter a campaign ID'; return; }
+
+  el.textContent = 'Loading…';
+  try {
+    const r = await api('/lemlist_contacts?campaignId=' + encodeURIComponent(campaignId));
+    if (r.contacts) {
+      // Upload to queue
+      await api('/upload', { contacts: r.contacts });
+      el.textContent = `Loaded ${r.contacts.length} contacts from Lemlist.`;
+      await loadContacts();
+    } else {
+      el.textContent = JSON.stringify(r);
+    }
+  } catch (e) {
+    el.textContent = 'Error: ' + e.message;
+  }
+}
+
+// ─── Balance ──────────────────────────────────────────────────────────────────
+async function fetchBalance() {
+  try {
+    const r = await api('/balance');
+    if (r.balance !== undefined) {
+      document.getElementById('balance-display').textContent =
+        '$' + parseFloat(r.balance).toFixed(2);
+    }
+  } catch (_) {}
+}
+
+// ─── UI Helpers ───────────────────────────────────────────────────────────────
+function setStatus(text, ready, calling) {
+  document.getElementById('status-text').textContent = text;
+  const dot = document.getElementById('status-dot');
+  dot.className = calling ? 'calling' : (ready ? 'ready' : '');
+}
+
+function setBtn(id, disabled) {
+  const el = document.getElementById(id);
+  if (el) el.disabled = disabled;
+}
+
+function enableDial(enabled) {
+  setBtn('btn-dial', !enabled);
+}
+
+function showAmdBadge(result) {
+  const el = document.getElementById('amd-badge');
+  el.style.display = 'block';
+  el.className = result === 'human' ? 'human' : 'machine';
+  el.textContent = result === 'human' ? 'HUMAN ANSWERED' : 'MACHINE / VOICEMAIL';
+}
+
+function hideAmdBadge() {
+  document.getElementById('amd-badge').style.display = 'none';
+}
+
+// ─── API ──────────────────────────────────────────────────────────────────────
+async function api(path, body) {
+  const url = BASE + path;
+  const opts = body
+    ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
+    : { method: 'GET' };
+  const r = await fetch(url, opts);
+  if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
+  return r.json();
+}
+</script>
+</body>
+</html>
