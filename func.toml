@@ -1,6 +1,7 @@
 # Telnyx Edge Compute — service config
 # Docs: https://developers.telnyx.com/docs/edge-compute/configuration
 name = "s9n-dialer"
+main = "src/index.js"
 runtime = "nodejs20"
 
 [edge_compute]
