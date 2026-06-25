@@ -23,8 +23,8 @@ jobs:
       - name: List functions
         run: telnyx-edge list
 
-      - name: Function logs
-        run: telnyx-edge logs --func-id b34a0bdf-1186-4eea-b185-10ded463bde8 || telnyx-edge logs || true
+      - name: All available commands
+        run: telnyx-edge --help || true
 
-      - name: Function status verbose
-        run: telnyx-edge status --func-id b34a0bdf-1186-4eea-b185-10ded463bde8 -v || telnyx-edge list -v || true
+      - name: Function detail
+        run: telnyx-edge get b34a0bdf-1186-4eea-b185-10ded463bde8 || telnyx-edge describe b34a0bdf-1186-4eea-b185-10ded463bde8 || telnyx-edge info b34a0bdf-1186-4eea-b185-10ded463bde8 || telnyx-edge logs b34a0bdf-1186-4eea-b185-10ded463bde8 || true
