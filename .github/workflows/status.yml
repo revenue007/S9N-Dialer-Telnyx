@@ -23,8 +23,5 @@ jobs:
       - name: List functions
         run: telnyx-edge list
 
-      - name: All available commands
-        run: telnyx-edge --help || true
-
-      - name: Function detail
-        run: telnyx-edge get b34a0bdf-1186-4eea-b185-10ded463bde8 || telnyx-edge describe b34a0bdf-1186-4eea-b185-10ded463bde8 || telnyx-edge info b34a0bdf-1186-4eea-b185-10ded463bde8 || telnyx-edge logs b34a0bdf-1186-4eea-b185-10ded463bde8 || true
+      - name: Revisions
+        run: telnyx-edge revisions --help && telnyx-edge revisions b34a0bdf-1186-4eea-b185-10ded463bde8 || telnyx-edge revisions || true
