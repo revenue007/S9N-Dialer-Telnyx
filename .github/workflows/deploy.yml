@@ -36,10 +36,15 @@ jobs:
           UPSTASH_REDIS_TOKEN: ${{ secrets.UPSTASH_REDIS_TOKEN }}
         run: |
           telnyx-edge secrets add TELNYX_API_KEY "$TELNYX_API_KEY"
+          sleep 5
           telnyx-edge secrets add TELNYX_ACCOUNT_SID "$TELNYX_ACCOUNT_SID"
+          sleep 5
           telnyx-edge secrets add TELNYX_CREDENTIAL_ID "$TELNYX_CREDENTIAL_ID"
+          sleep 5
           telnyx-edge secrets add FROM_NUMBER "$FROM_NUMBER"
+          sleep 5
           telnyx-edge secrets add UPSTASH_REDIS_URL "$UPSTASH_REDIS_URL"
+          sleep 5
           telnyx-edge secrets add UPSTASH_REDIS_TOKEN "$UPSTASH_REDIS_TOKEN"
 
       - name: Deploy
