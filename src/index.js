@@ -1,5 +1,6 @@
 'use strict';
 
+const http = require('http');
 const { URL } = require('url');
 const fs = require('fs');
 const path = require('path');
@@ -27,57 +28,63 @@ const CORS = {
   'Access-Control-Allow-Headers': 'Content-Type',
 };
 
-let indexHtml;
+const indexHtml = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
 
-module.exports = {
-  init: async () => {
-    indexHtml = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
-  },
+async function parseBody(req) {
+  return new Promise(resolve => {
+    let raw = '';
+    req.on('data', c => { raw += c; });
+    req.on('end', () => {
+      if (!raw) return resolve({});
+      const ct = req.headers['content-type'] || '';
+      try {
+        if (ct.includes('application/json')) return resolve(JSON.parse(raw));
+        if (ct.includes('application/x-www-form-urlencoded'))
+          return resolve(Object.fromEntries(new URLSearchParams(raw)));
+      } catch {}
+      resolve({});
+    });
+  });
+}
 
-  handle: async (context, body) => {
-    const { method, headers, query, log } = context;
+const PORT = process.env.PORT || 8080;
 
-    // Path: faas-js-runtime exposes context.path; fall back to forwarded headers
-    const rawPath = context.path
-      || headers['x-forwarded-uri']
-      || headers['x-original-uri']
-      || '/';
-    const pathname = rawPath.split('?')[0];
+http.createServer(async (req, res) => {
+  const url = new URL(req.url, `http://localhost:${PORT}`);
+  const pathname = url.pathname;
 
-    if (log) log.info({ method, pathname }, 'request');
+  if (req.method === 'OPTIONS') {
+    res.writeHead(204, CORS);
+    return res.end();
+  }
 
-    if (method === 'OPTIONS') {
-      return { statusCode: 204, headers: CORS, body: '' };
+  if (pathname === '/' || pathname === '/index.html') {
+    res.writeHead(200, { ...CORS, 'Content-Type': 'text/html' });
+    return res.end(indexHtml);
+  }
+
+  const handler = routes[pathname];
+  if (!handler) {
+    res.writeHead(404, { ...CORS, 'Content-Type': 'application/json' });
+    return res.end(JSON.stringify({ error: 'Not found' }));
+  }
+
+  const query = Object.fromEntries(url.searchParams);
+  const body = await parseBody(req);
+  const params = { ...query, ...body, _method: req.method };
+
+  try {
+    const result = await handler(params);
+    if (typeof result === 'string' && result.startsWith('<?xml')) {
+      res.writeHead(200, { ...CORS, 'Content-Type': 'text/xml' });
+      res.end(result);
+    } else {
+      res.writeHead(200, { ...CORS, 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(result));
     }
-
-    if (pathname === '/' || pathname === '/index.html') {
-      return { statusCode: 200, headers: { ...CORS, 'Content-Type': 'text/html' }, body: indexHtml };
-    }
-
-    const handler = routes[pathname];
-    if (!handler) {
-      // Dump context keys on unknown routes to help debug path discovery
-      if (log) log.warn({ contextKeys: Object.keys(context), pathname }, 'no route matched');
-      return {
-        statusCode: 404,
-        headers: { ...CORS, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ error: 'Not found', path: pathname, contextKeys: Object.keys(context) }),
-      };
-    }
-
-    const params = { ...query, ...body, _method: method };
-
-    try {
-      const result = await handler(params);
-      if (typeof result === 'string' && result.startsWith('<?xml')) {
-        return { statusCode: 200, headers: { ...CORS, 'Content-Type': 'text/xml' }, body: result };
-      }
-      return { statusCode: 200, headers: { ...CORS, 'Content-Type': 'application/json' }, body: JSON.stringify(result) };
-    } catch (err) {
-      if (log) log.error({ pathname, err: err.message }, 'handler error');
-      return { statusCode: 500, headers: { ...CORS, 'Content-Type': 'application/json' }, body: JSON.stringify({ error: err.message }) };
-    }
-  },
-
-  shutdown: async () => {},
-};
+  } catch (err) {
+    console.error(pathname, err.message);
+    res.writeHead(500, { ...CORS, 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: err.message }));
+  }
+}).listen(PORT, () => console.log('S9N Dialer listening on port', PORT));
