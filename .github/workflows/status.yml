@@ -23,5 +23,8 @@ jobs:
       - name: List functions
         run: telnyx-edge list
 
-      - name: Function status
-        run: telnyx-edge status --func-id b34a0bdf-1186-4eea-b185-10ded463bde8 || telnyx-edge status || true
+      - name: Function logs
+        run: telnyx-edge logs --func-id b34a0bdf-1186-4eea-b185-10ded463bde8 || telnyx-edge logs || true
+
+      - name: Function status verbose
+        run: telnyx-edge status --func-id b34a0bdf-1186-4eea-b185-10ded463bde8 -v || telnyx-edge list -v || true
