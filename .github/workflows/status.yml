@@ -24,4 +24,4 @@ jobs:
         run: telnyx-edge list
 
       - name: Revisions
-        run: telnyx-edge revisions list --func-id b34a0bdf-1186-4eea-b185-10ded463bde8 -v || telnyx-edge revisions list -v || true
+        run: telnyx-edge revisions list s9n-dialer -v
