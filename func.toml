@@ -3,6 +3,10 @@
 name = "s9n-dialer"
 runtime = "nodejs20"
 
+[edge_compute]
+func_id = "b34a0bdf-1186-4eea-b185-10ded463bde8"
+func_name = "s9n-dialer"
+
 # Set these env vars via the Telnyx portal or CLI before deploying:
 #   TELNYX_API_KEY        — Telnyx API key (from portal.telnyx.com)
 #   TELNYX_ACCOUNT_SID    — Telnyx account SID (from TeXML app settings)

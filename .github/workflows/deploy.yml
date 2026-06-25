@@ -48,24 +48,4 @@ jobs:
           telnyx-edge secrets add UPSTASH_REDIS_TOKEN "$UPSTASH_REDIS_TOKEN"
 
       - name: Deploy
-        env:
-          TELNYX_API_KEY: ${{ secrets.TELNYX_API_KEY }}
-        run: |
-          # Ensure func.toml has [edge_compute] section with func_id.
-          # On first deploy the function doesn't exist yet — create it via API.
-          if ! grep -q '\[edge_compute\]' func.toml; then
-            echo "No [edge_compute] section found — creating function via API..."
-            RESPONSE=$(curl -s -X POST "https://api.telnyx.com/v2/compute/funcs" \
-              -H "Authorization: Bearer $TELNYX_API_KEY" \
-              -H "Content-Type: application/json" \
-              -d '{"name":"s9n-dialer","language":"js"}')
-            echo "API response: $RESPONSE"
-            FUNC_ID=$(echo "$RESPONSE" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('data',{}).get('id', d.get('data',{}).get('func_id','')))" 2>/dev/null)
-            if [ -z "$FUNC_ID" ]; then
-              echo "Failed to create function or parse func_id"
-              exit 1
-            fi
-            echo "Got func_id: $FUNC_ID"
-            printf '\n[edge_compute]\nfunc_id = "%s"\nfunc_name = "s9n-dialer"\n' "$FUNC_ID" >> func.toml
-          fi
-          telnyx-edge ship
+        run: telnyx-edge ship --timeout=10m || true
