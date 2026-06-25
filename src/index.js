@@ -1,6 +1,5 @@
 // SeKondBrain Power Dialer — Telnyx Edge Compute entry point
-// Single HTTP server routing all function paths.
-const http = require('http');
+// Uses Knative faas-js-runtime: exports { init, handle, shutdown }
 const { URL } = require('url');
 
 const routes = {
@@ -26,55 +25,75 @@ const CORS = {
   'Access-Control-Allow-Headers': 'Content-Type',
 };
 
-async function parseBody(req) {
-  return new Promise(resolve => {
-    let raw = '';
-    req.on('data', c => { raw += c; });
-    req.on('end', () => {
-      if (!raw) return resolve({});
-      const ct = req.headers['content-type'] || '';
-      try {
-        if (ct.includes('application/json')) return resolve(JSON.parse(raw));
-        if (ct.includes('application/x-www-form-urlencoded'))
-          return resolve(Object.fromEntries(new URLSearchParams(raw)));
-      } catch {}
-      resolve({});
-    });
-  });
-}
+module.exports = {
+  init() {
+    console.log('S9N Dialer initialised');
+  },
 
-http.createServer(async (req, res) => {
-  const url = new URL(req.url, 'http://localhost');
-  const handler = routes[url.pathname];
+  async handle(context, body) {
+    const req = context.req || context;
+    const method = (req.method || 'GET').toUpperCase();
+    const rawUrl = req.url || '/';
+    const url = new URL(rawUrl, 'http://localhost');
+    const pathname = url.pathname;
 
-  if (req.method === 'OPTIONS') {
-    res.writeHead(204, CORS);
-    return res.end();
-  }
-
-  if (!handler) {
-    res.writeHead(404, CORS);
-    return res.end(JSON.stringify({ error: 'Not found' }));
-  }
-
-  const query = Object.fromEntries(url.searchParams);
-  const body = await parseBody(req);
-  const params = { ...query, ...body, _method: req.method };
-
-  try {
-    const result = await handler(params);
-    if (typeof result === 'string' && result.startsWith('<?xml')) {
-      res.writeHead(200, { ...CORS, 'Content-Type': 'text/xml' });
-      res.end(result);
-    } else {
-      res.writeHead(200, { ...CORS, 'Content-Type': 'application/json' });
-      res.end(JSON.stringify(result));
+    // CORS preflight
+    if (method === 'OPTIONS') {
+      return { statusCode: 204, headers: CORS, body: '' };
     }
-  } catch (err) {
-    console.error(url.pathname, err.message);
-    res.writeHead(500, { ...CORS, 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ error: err.message }));
-  }
-}).listen(process.env.PORT || 3000, () =>
-  console.log('S9N Dialer (Telnyx) on port', process.env.PORT || 3000)
-);
+
+    // Serve index.html at root
+    if (pathname === '/' || pathname === '/index.html') {
+      const fs = require('fs');
+      const path = require('path');
+      const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
+      return {
+        statusCode: 200,
+        headers: { ...CORS, 'Content-Type': 'text/html' },
+        body: html,
+      };
+    }
+
+    const handler = routes[pathname];
+    if (!handler) {
+      return {
+        statusCode: 404,
+        headers: { ...CORS, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ error: 'Not found' }),
+      };
+    }
+
+    const query = Object.fromEntries(url.searchParams);
+    const parsed = typeof body === 'string'
+      ? (() => { try { return JSON.parse(body); } catch { return {}; } })()
+      : (body || {});
+    const params = { ...query, ...parsed, _method: method };
+
+    try {
+      const result = await handler(params);
+      if (typeof result === 'string' && result.startsWith('<?xml')) {
+        return {
+          statusCode: 200,
+          headers: { ...CORS, 'Content-Type': 'text/xml' },
+          body: result,
+        };
+      }
+      return {
+        statusCode: 200,
+        headers: { ...CORS, 'Content-Type': 'application/json' },
+        body: JSON.stringify(result),
+      };
+    } catch (err) {
+      console.error(pathname, err.message);
+      return {
+        statusCode: 500,
+        headers: { ...CORS, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ error: err.message }),
+      };
+    }
+  },
+
+  shutdown() {
+    console.log('S9N Dialer shutting down');
+  },
+};
