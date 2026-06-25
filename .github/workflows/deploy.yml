@@ -58,7 +58,7 @@ jobs:
             RESPONSE=$(curl -s -X POST "https://api.telnyx.com/v2/compute/funcs" \
               -H "Authorization: Bearer $TELNYX_API_KEY" \
               -H "Content-Type: application/json" \
-              -d '{"func_name":"s9n-dialer","language":"js"}')
+              -d '{"name":"s9n-dialer","language":"js"}')
             echo "API response: $RESPONSE"
             FUNC_ID=$(echo "$RESPONSE" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('data',{}).get('id', d.get('data',{}).get('func_id','')))" 2>/dev/null)
             if [ -z "$FUNC_ID" ]; then
