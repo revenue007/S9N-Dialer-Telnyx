@@ -12,21 +12,35 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
+      - name: Install telnyx-edge CLI
+        run: |
+          curl -sL "https://github.com/team-telnyx/edge-compute/releases/download/v0.2.2/telnyx-edge-v0.2.2-linux-amd64.tar.gz" \
+            -o /tmp/te.tar.gz
+          tar -xz -C /tmp/ -f /tmp/te.tar.gz
+          sudo mv /tmp/telnyx-edge-v0.2.2-linux-amd64/telnyx-edge /usr/local/bin/telnyx-edge
+          chmod +x /usr/local/bin/telnyx-edge
+          telnyx-edge --version || true
 
-      - name: Install Telnyx CLI
-        # See https://github.com/team-telnyx/telnyx-cli for latest install method
-        run: npm install -g @telnyx/cli
-
-      - name: Deploy to Telnyx Edge Compute
+      - name: Authenticate
         env:
           TELNYX_API_KEY: ${{ secrets.TELNYX_API_KEY }}
-        run: |
-          telnyx login --api-key "$TELNYX_API_KEY"
-          telnyx edge-compute:deploy
+        run: telnyx-edge auth api-key set "$TELNYX_API_KEY"
 
-      - name: Done
-        run: echo "Deployed to Telnyx Edge Compute"
+      - name: Push secrets to Edge function
+        env:
+          TELNYX_API_KEY: ${{ secrets.TELNYX_API_KEY }}
+          TELNYX_ACCOUNT_SID: ${{ secrets.TELNYX_ACCOUNT_SID }}
+          TELNYX_CREDENTIAL_ID: ${{ secrets.TELNYX_CREDENTIAL_ID }}
+          FROM_NUMBER: ${{ secrets.FROM_NUMBER }}
+          UPSTASH_REDIS_URL: ${{ secrets.UPSTASH_REDIS_URL }}
+          UPSTASH_REDIS_TOKEN: ${{ secrets.UPSTASH_REDIS_TOKEN }}
+        run: |
+          telnyx-edge secrets add TELNYX_API_KEY "$TELNYX_API_KEY"
+          telnyx-edge secrets add TELNYX_ACCOUNT_SID "$TELNYX_ACCOUNT_SID"
+          telnyx-edge secrets add TELNYX_CREDENTIAL_ID "$TELNYX_CREDENTIAL_ID"
+          telnyx-edge secrets add FROM_NUMBER "$FROM_NUMBER"
+          telnyx-edge secrets add UPSTASH_REDIS_URL "$UPSTASH_REDIS_URL"
+          telnyx-edge secrets add UPSTASH_REDIS_TOKEN "$UPSTASH_REDIS_TOKEN"
+
+      - name: Deploy
+        run: telnyx-edge ship
