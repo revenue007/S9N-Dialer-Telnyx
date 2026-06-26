@@ -40,6 +40,7 @@ module.exports = {
     const { method, headers, query } = context;
 
     const rawPath = context.path
+      || context.url
       || headers['x-forwarded-uri']
       || headers['x-original-uri']
       || '/';
