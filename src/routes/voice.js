@@ -1,45 +1,31 @@
-// /voice — TeXML webhook (replaces TwiML voice.js)
-// Normal mode  → <Dial> directly to phone number
-// Power Dial   → browser joins named conference; outbound leg created via
-//               REST API with sync AMD so voice_join receives AnsweredBy
+// /voice — TeXML webhook for the browser's WebRTC leg
+//
+// Browser calls: sip:<confName>@sip.telnyx.com
+// Telnyx fires this webhook with To = "sip:<confName>@sip.telnyx.com"
+// We extract confName from the SIP URI and place the browser in that conference.
+// endConferenceOnExit=true so the entire conference tears down when the browser leaves.
+
 const kv = require('../kv');
-const telnyx = require('../telnyx');
 
 function xml(body) {
   return `<?xml version="1.0" encoding="UTF-8"?><Response>${body}</Response>`;
 }
 
 module.exports = async function voice(params) {
-  const to = params.To || params.to || '';
-  const powerDial = params.PowerDial === '1';
-  const callSid = params.CallSid || params.callSid || '';
-  const fnUrl = process.env.FUNCTION_URL;
+  const toRaw = params.To || params.to || '';
+  // "sip:pd_abc123@sip.telnyx.com" → "pd_abc123"
+  const confName = toRaw.replace(/^sip:/i, '').split('@')[0].trim();
 
-  if (await kv.hexists('blacklist', to)) return xml('<Reject/>');
+  if (!confName) return xml('<Reject/>');
 
-  if (!powerDial) {
-    return xml(`<Dial callerId="${process.env.FROM_NUMBER}" timeout="45"><Number>${to}</Number></Dial>`);
-  }
-
-  const confName = 'pd_' + callSid;
-
-  try {
-    await telnyx.createCall({
-      To: to,
-      From: process.env.FROM_NUMBER,
-      Url: `${fnUrl}/voice_join?conf=${encodeURIComponent(confName)}&parentCallSid=${encodeURIComponent(callSid)}`,
-      MachineDetection: 'Enable',
-      AsyncAmd: 'false',
-      StatusCallback: `${fnUrl}/amd_status?parentCallSid=${encodeURIComponent(callSid)}`,
-      StatusCallbackMethod: 'POST',
-      StatusCallbackEvent: 'no-answer failed busy canceled',
-      Timeout: '45',
-      MachineDetectionTimeout: '30',
-    });
-  } catch {
-    // Fall back to direct dial if outbound creation fails
-    return xml(`<Dial callerId="${process.env.FROM_NUMBER}" timeout="45"><Number>${to}</Number></Dial>`);
-  }
-
-  return xml(`<Dial><Conference startConferenceOnEnter="true" endConferenceOnExit="true">${confName}</Conference></Dial>`);
+  return xml(
+    `<Dial>` +
+      `<Conference ` +
+        `startConferenceOnEnter="true" ` +
+        `endConferenceOnExit="true" ` +
+        `beep="false" ` +
+        `waitUrl=""` +
+      `>${confName}</Conference>` +
+    `</Dial>`
+  );
 };

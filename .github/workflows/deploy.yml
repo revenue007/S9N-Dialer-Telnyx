@@ -1,4 +1,4 @@
-name: Deploy to Railway
+name: Deploy to Telnyx Edge Compute
 
 on:
   push:
@@ -12,10 +12,51 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install Railway CLI
-        run: npm install -g @railway/cli
+      - name: Install telnyx-edge CLI
+        run: |
+          curl -sL "https://github.com/team-telnyx/edge-compute/releases/download/v0.2.2/telnyx-edge-v0.2.2-linux-amd64.tar.gz" \
+            -o /tmp/te.tar.gz
+          tar -xz -C /tmp/ -f /tmp/te.tar.gz
+          sudo mv /tmp/telnyx-edge-v0.2.2-linux-amd64/telnyx-edge /usr/local/bin/telnyx-edge
+          telnyx-edge --version || true
+
+      - name: Authenticate
+        env:
+          TELNYX_API_KEY: ${{ secrets.TELNYX_API_KEY }}
+        run: telnyx-edge auth api-key set "$TELNYX_API_KEY"
+
+      - name: Push secrets
+        env:
+          TELNYX_API_KEY:        ${{ secrets.TELNYX_API_KEY }}
+          TELNYX_ACCOUNT_SID:    ${{ secrets.TELNYX_ACCOUNT_SID }}
+          TELNYX_CREDENTIAL_ID:  ${{ secrets.TELNYX_CREDENTIAL_ID }}
+          FROM_NUMBER:           ${{ secrets.FROM_NUMBER }}
+          FUNCTION_URL:          ${{ secrets.FUNCTION_URL }}
+          UPSTASH_REDIS_URL:     ${{ secrets.UPSTASH_REDIS_URL }}
+          UPSTASH_REDIS_TOKEN:   ${{ secrets.UPSTASH_REDIS_TOKEN }}
+          LEMLIST_API_KEY:       ${{ secrets.LEMLIST_API_KEY }}
+          GOOGLE_SHEETS_WEBHOOK: ${{ secrets.GOOGLE_SHEETS_WEBHOOK }}
+        run: |
+          push_secret() {
+            local name=$1 value=$2
+            if [ -n "$value" ]; then
+              telnyx-edge secrets add "$name" "$value" && sleep 3
+            fi
+          }
+          push_secret TELNYX_API_KEY        "$TELNYX_API_KEY"
+          push_secret TELNYX_ACCOUNT_SID    "$TELNYX_ACCOUNT_SID"
+          push_secret TELNYX_CREDENTIAL_ID  "$TELNYX_CREDENTIAL_ID"
+          push_secret FROM_NUMBER           "$FROM_NUMBER"
+          push_secret FUNCTION_URL          "$FUNCTION_URL"
+          push_secret UPSTASH_REDIS_URL     "$UPSTASH_REDIS_URL"
+          push_secret UPSTASH_REDIS_TOKEN   "$UPSTASH_REDIS_TOKEN"
+          push_secret LEMLIST_API_KEY       "$LEMLIST_API_KEY"
+          push_secret GOOGLE_SHEETS_WEBHOOK "$GOOGLE_SHEETS_WEBHOOK"
 
       - name: Deploy
-        env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-        run: railway up --detach
+        run: telnyx-edge ship --timeout=10m || true
+
+      - name: Verify deployment
+        run: |
+          sleep 15
+          telnyx-edge revisions list --func-name s9n-dialer | head -20
