@@ -134,6 +134,15 @@
 </div>
 
 <div class="card">
+  <div class="card-title">Test Dial (manual)</div>
+  <div class="btn-row">
+    <input type="text" id="test-number" placeholder="+12125550001" style="flex:1" />
+    <button class="btn-slate" onclick="testDial()">Dial</button>
+  </div>
+  <div class="status-msg" id="test-status"></div>
+</div>
+
+<div class="card">
   <div class="card-title">Upload Contacts (JSON array)</div>
   <div id="upload-area">
     <textarea id="upload-textarea" placeholder='[{"firstName":"Jane","lastName":"Doe","phone":"+12125550001","company":"Acme"}]'></textarea>
@@ -472,6 +481,22 @@ async function loadLemlist() {
     el.textContent = 'Loaded ' + up.added + ' contacts from Lemlist (' + up.skipped + ' skipped).';
     currentIdx = 0;
     await loadContacts();
+  } catch (e) { el.textContent = 'Error: ' + e.message; }
+}
+
+async function testDial() {
+  const number = document.getElementById('test-number').value.trim();
+  const el = document.getElementById('test-status');
+  if (!number) { el.textContent = 'Enter a phone number'; return; }
+  if (!sessionActive) { el.textContent = 'Start a session first, then dial'; return; }
+  el.textContent = 'Dialing ' + number + '…';
+  try {
+    const r = await api('/dial_out', { to: number, confName });
+    if (r.error) { el.textContent = 'Error: ' + r.error; return; }
+    outboundSid = r.outboundSid;
+    el.textContent = 'Dialing — outbound SID: ' + r.outboundSid;
+    setBtn('btn-hangup-out', false);
+    startAmdPoll();
   } catch (e) { el.textContent = 'Error: ' + e.message; }
 }
 
