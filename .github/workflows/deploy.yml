@@ -32,8 +32,6 @@ jobs:
           TELNYX_CREDENTIAL_ID:  ${{ secrets.TELNYX_CREDENTIAL_ID }}
           FROM_NUMBER:           ${{ secrets.FROM_NUMBER }}
           FUNCTION_URL:          ${{ secrets.FUNCTION_URL }}
-          UPSTASH_REDIS_URL:     ${{ secrets.UPSTASH_REDIS_URL }}
-          UPSTASH_REDIS_TOKEN:   ${{ secrets.UPSTASH_REDIS_TOKEN }}
           LEMLIST_API_KEY:       ${{ secrets.LEMLIST_API_KEY }}
           GOOGLE_SHEETS_WEBHOOK: ${{ secrets.GOOGLE_SHEETS_WEBHOOK }}
         run: |
@@ -48,8 +46,6 @@ jobs:
           push_secret TELNYX_CREDENTIAL_ID  "$TELNYX_CREDENTIAL_ID"
           push_secret FROM_NUMBER           "$FROM_NUMBER"
           push_secret FUNCTION_URL          "$FUNCTION_URL"
-          push_secret UPSTASH_REDIS_URL     "$UPSTASH_REDIS_URL"
-          push_secret UPSTASH_REDIS_TOKEN   "$UPSTASH_REDIS_TOKEN"
           push_secret LEMLIST_API_KEY       "$LEMLIST_API_KEY"
           push_secret GOOGLE_SHEETS_WEBHOOK "$GOOGLE_SHEETS_WEBHOOK"
 
