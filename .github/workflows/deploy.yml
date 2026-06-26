@@ -50,9 +50,19 @@ jobs:
           push_secret GOOGLE_SHEETS_WEBHOOK "$GOOGLE_SHEETS_WEBHOOK"
 
       - name: Deploy
-        run: telnyx-edge ship --timeout=10m || true
+        run: |
+          for i in 1 2 3 4 5; do
+            output=$(telnyx-edge ship --timeout=10m 2>&1)
+            echo "$output"
+            if echo "$output" | grep -q "409"; then
+              echo "Attempt $i: 409 conflict (operation in progress), waiting 30s..."
+              sleep 30
+            else
+              break
+            fi
+          done
 
       - name: Verify deployment
         run: |
           sleep 15
-          telnyx-edge revisions list --func-name s9n-dialer | head -20
+          telnyx-edge revisions list s9n-dialer | head -20
