@@ -1,34 +1,40 @@
-// /voice_join — TeXML for outbound leg (replaces TwiML voice_join.js)
-// Telnyx delivers sync AMD result in AnsweredBy before hitting this URL.
-// machine_* | fax  → kill parent (browser) call + end conference
-// human            → join conference, connecting browser and contact
-const telnyx = require('../telnyx');
+// /voice_join — TeXML webhook for the outbound (contact) leg
+//
+// Telnyx runs AMD before hitting this URL (AsyncAmd=false, so AnsweredBy is populated).
+//
+// machine_* | fax → hang up the outbound leg; browser stays in conference
+// human           → join the named conference (connecting browser + contact)
+//
+// IMPORTANT: endConferenceOnExit=false on the outbound leg so when the contact
+// hangs up the browser is NOT disconnected — we just dial the next person.
+
+const kv = require('../kv');
 
 function xml(body) {
   return `<?xml version="1.0" encoding="UTF-8"?><Response>${body}</Response>`;
 }
 
 module.exports = async function voiceJoin(params) {
-  const answeredBy    = params.AnsweredBy || '';
-  const confName      = params.conf || '';
-  const parentCallSid = params.parentCallSid || '';
-  const isMachine     = answeredBy.startsWith('machine') || answeredBy === 'fax';
+  const answeredBy  = params.AnsweredBy || '';
+  const confName    = params.conf || '';
+  const outboundSid = params.CallSid || '';
+  const isMachine   = answeredBy.startsWith('machine') || answeredBy === 'fax';
 
   if (isMachine) {
-    if (parentCallSid) await telnyx.endCall(parentCallSid);
-
-    // Fallback: end conference by friendly name — guarantees browser disconnects
-    if (confName) {
-      try {
-        const resp = await telnyx.listConferences(confName);
-        const list = resp.conferences || (Array.isArray(resp) ? resp : []);
-        if (list.length > 0) {
-          await telnyx.endConference(list[0].sid || list[0].ConferenceSid);
-        }
-      } catch {}
-    }
+    await kv.set('amd_result', { state: 'machine', outboundSid, ts: Date.now() }).catch(() => {});
     return xml('<Hangup/>');
   }
 
-  return xml(`<Dial><Conference startConferenceOnEnter="true" endConferenceOnExit="true">${confName}</Conference></Dial>`);
+  // Human answered — save result and join conference
+  await kv.set('amd_result', { state: 'human', outboundSid, ts: Date.now() }).catch(() => {});
+
+  return xml(
+    `<Dial>` +
+      `<Conference ` +
+        `startConferenceOnEnter="true" ` +
+        `endConferenceOnExit="false" ` +
+        `beep="false"` +
+      `>${confName}</Conference>` +
+    `</Dial>`
+  );
 };

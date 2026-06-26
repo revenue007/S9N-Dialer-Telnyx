@@ -1,19 +1,13 @@
-// /resume_state — GET/POST last dialled position for page-refresh resume
-// Replaces Twilio Sync Document with a simple KV string.
+// /resume_state — GET/POST: persist queue position across page refreshes
 const kv = require('../kv');
 
 module.exports = async function resumeState(params) {
-  // POST: save position
-  if (params.lastPhone || params._method === 'POST') {
+  if (params._method === 'POST' || params.currentIdx !== undefined) {
     await kv.set('resume_state', {
-      lastPhone: params.lastPhone,
-      firstName: params.firstName,
-      lastName:  params.lastName,
-      timestamp: new Date().toISOString(),
+      currentIdx: params.currentIdx !== undefined ? parseInt(params.currentIdx, 10) : 0,
+      timestamp:  new Date().toISOString(),
     });
     return { success: true };
   }
-
-  // GET: read position
   return (await kv.get('resume_state')) || {};
 };

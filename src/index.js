@@ -7,9 +7,11 @@ const path = require('path');
 
 const routes = {
   '/token':            require('./routes/token'),
+  '/config':           require('./routes/config'),
   '/voice':            require('./routes/voice'),
   '/voice_join':       require('./routes/voice_join'),
   '/amd_status':       require('./routes/amd_status'),
+  '/amd_result':       require('./routes/amd_result'),
   '/contacts':         require('./routes/contacts'),
   '/update':           require('./routes/update'),
   '/upload':           require('./routes/upload'),
