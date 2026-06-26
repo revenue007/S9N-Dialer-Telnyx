@@ -80,6 +80,12 @@ module.exports = {
   // Generate a short-lived WebRTC token for the browser
   // TELNYX_CREDENTIAL_ID = Telephony Credential ID from portal.telnyx.com
   async generateToken() {
-    return v2Req('POST', `/telephony_credentials/${process.env.TELNYX_CREDENTIAL_ID}/token`);
+    const opts = {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${KEY()}`, 'Content-Type': 'application/json' },
+    };
+    const r = await fetch(`${V2}/telephony_credentials/${process.env.TELNYX_CREDENTIAL_ID}/token`, opts);
+    if (!r.ok) throw new Error(`Telnyx v2 ${r.status}: ${await r.text()}`);
+    return r.text();
   },
 };

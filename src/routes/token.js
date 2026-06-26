@@ -9,6 +9,6 @@
 const telnyx = require('../telnyx');
 
 module.exports = async function token() {
-  const result = await telnyx.generateToken();
-  return { token: result.data.token };
+  const token = await telnyx.generateToken();
+  return { token };
 };
